@@ -35,7 +35,7 @@ void* send_through(void* bar)
     }
 }
 
-int main()
+int main(int argc, char const* argv[])
 {
     int client_sockfd = 0;
     int server_sockfd = 0;
@@ -52,6 +52,8 @@ int main()
 
     pthread_t client_th, server_th;
 
+    char* OKsig = "OK";
+
     // For reading user command
     char* foo = NULL;
     size_t num = 5;
@@ -60,13 +62,22 @@ int main()
     // Fill sockaddr_in structs
     client_dat.sin_family = AF_INET;
     client_dat.sin_addr.s_addr = INADDR_ANY;
-    client_dat.sin_port = htons(2001);
+    client_dat.sin_port = htons(45321);
 
     server_dat.sin_family = AF_INET;
-    inet_aton("127.0.0.1", &server_dat.sin_addr);
-    server_dat.sin_port = htons(56789);
+    server_dat.sin_addr.s_addr = INADDR_ANY;
+    server_dat.sin_port = htons(54321);
 
     // Create and connect sockets...
+    printf("Waiting for server to connect.\n");
+
+    server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    bind(server_sockfd, (struct sockaddr*)&server_dat, dat_len);
+    listen(server_sockfd, 5);
+    server_conn = accept(server_sockfd, NULL, NULL);
+
+    printf("Server connected to socket.\n");
+
     client_sockfd = socket(AF_INET, SOCK_STREAM, 0);
     bind(client_sockfd, (struct sockaddr*)&client_dat, dat_len);
     listen(client_sockfd, 5);
@@ -74,17 +85,17 @@ int main()
 
     printf("Client connected to socket.\n");
 
-    server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    connect(server_sockfd, (struct sockaddr*)&server_dat, (socklen_t)dat_len);
-
-    printf("Connected to server.\n");
-
     // Fill tunnel_socks structs
-    to_client.recv_from = server_sockfd;
+    to_client.recv_from = server_conn;
     to_client.send_to = client_conn;
 
     to_server.recv_from = client_conn;
-    to_server.send_to = server_sockfd;
+    to_server.send_to = server_conn;
+
+    // Send "OK" signal to complete tunnel connection in user's clientside code
+    send(to_server.send_to, OKsig, 2, 0);
+
+    printf("Signal 'OK' sent.\n");
 
     // Start client and server communication threads to read from them
     pthread_create(&server_th, NULL, send_through, (void*)&to_client);

@@ -36,12 +36,12 @@ void* send_through(void* bar)
     }
 }
 
-int main()
+int main(int argc, char const* argv[])
 {
     int client_sockfd = 0;
     int server_sockfd = 0;
-    int client_conn = 0;
-    int server_conn = 0;
+    //int client_conn = 0;
+    //int server_conn = 0;
 
     struct sockaddr_in server_dat;
     struct sockaddr_in client_dat;
@@ -53,6 +53,8 @@ int main()
 
     pthread_t client_th, server_th;
 
+    char SockSig[4] = { 0 };
+
     // For reading user command
     char* foo = NULL;
     size_t num = 5;
@@ -60,31 +62,37 @@ int main()
 
     // Fill sockaddr_in structs
     client_dat.sin_family = AF_INET;
-    client_dat.sin_addr.s_addr = INADDR_ANY;
-    client_dat.sin_port = htons(2001);
+    inet_aton(argv[1], &client_dat.sin_addr);
+    client_dat.sin_port = htons(54321);
 
     server_dat.sin_family = AF_INET;
     inet_aton("127.0.0.1", &server_dat.sin_addr);
     server_dat.sin_port = htons(56789);
 
     // Create and connect sockets...
-    client_sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    bind(client_sockfd, (struct sockaddr*)&client_dat, dat_len);
-    listen(client_sockfd, 5);
-    client_conn = accept(client_sockfd, NULL, NULL);
+    printf("Waiting to connect to public server.\n");
 
-    printf("Client connected to socket.\n");
+    client_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    connect(client_sockfd, (struct sockaddr*)&client_dat, (socklen_t)dat_len);
+
+    printf("Connected to public server.\n");
+
+    // Keeps checking until signal "OK" received
+    while (strcmp(SockSig, "OK"))
+    {
+        recv(client_sockfd, SockSig, 2, 0);
+    }
 
     server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
     connect(server_sockfd, (struct sockaddr*)&server_dat, (socklen_t)dat_len);
 
-    printf("Connected to server.\n");
+    printf("Connected to private server.\n");
 
     // Fill tunnel_socks structs
     to_client.recv_from = server_sockfd;
-    to_client.send_to = client_conn;
+    to_client.send_to = client_sockfd;
 
-    to_server.recv_from = client_conn;
+    to_server.recv_from = client_sockfd;
     to_server.send_to = server_sockfd;
 
     // Start client and server communication threads to read from them
